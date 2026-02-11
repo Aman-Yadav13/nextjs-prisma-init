@@ -1,27 +1,29 @@
+import axios from "axios";
 import { auth } from "@/auth";
 
-// Helper to make secure calls from SERVER Components
-export async function apiFetch(endpoint: string, options: RequestInit = {}) {
+const apiClient = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+apiClient.interceptors.request.use(async (config) => {
   const session = await auth();
-
-  if (!session?.id_token) {
-    throw new Error("Unauthorized: No session found");
+  if (session?.id_token) {
+    config.headers.Authorization = `Bearer ${session.id_token}`;
   }
+  return config;
+});
 
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      ...options.headers,
-      Authorization: `Bearer ${session.id_token}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  // Handle 401s centrally (optional)
-  if (res.status === 401) {
-    // You might want to redirect to login or throw specific error
-    console.error("Token expired or invalid");
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.error("Token expired or invalid");
+    }
+    return Promise.reject(error);
   }
+);
 
-  return res;
-}
+export default apiClient;

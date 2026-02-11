@@ -7,3 +7,197 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Environment {
+  id            Int     @id @default(autoincrement())
+  slug          String  @unique
+  customer_name String
+  environment   String
+  type          String?
+
+  cloud_platform String @default("aws")
+  account_id     String
+  region         String
+
+  created_at_git  String?
+  updated_at_helm String?
+  web_url         String?
+
+  infrastructure Infrastructure?
+  cluster        Cluster?
+  data_store     DataStore?
+  application    Application?
+  aws_resources  AWSResource?
+
+  @@index([customer_name])
+  @@index([account_id])
+  @@map("environments")
+}
+
+model Infrastructure {
+  id          Int         @id @default(autoincrement())
+  env_id      Int         @unique
+  environment Environment @relation(fields: [env_id], references: [id], onDelete: Cascade)
+
+  vpc_id   String?
+  vpc_cidr String?
+
+  subnet_app_1 String?
+  subnet_app_2 String?
+  subnet_app_3 String?
+
+  instance_type String?
+  is_multi_az   Boolean @default(false)
+
+  resource_group String?
+
+  @@map("infrastructure")
+}
+
+model Cluster {
+  id          Int         @id @default(autoincrement())
+  env_id      Int         @unique
+  environment Environment @relation(fields: [env_id], references: [id], onDelete: Cascade)
+
+  cluster_name String
+  helm_branch  String?
+
+  dashboard_url String?
+  ingress_host  String?
+
+  has_ingress    Boolean @default(false)
+  has_autoscaler Boolean @default(false)
+
+  @@map("clusters")
+}
+
+model DataStore {
+  id          Int         @id @default(autoincrement())
+  env_id      Int         @unique
+  environment Environment @relation(fields: [env_id], references: [id], onDelete: Cascade)
+
+  rds_endpoint String?
+  rds_class    String?
+
+  es_endpoint String?
+  es_instance String?
+
+  redis_host       String?
+  redis_cluster_id String?
+
+  @@map("data_stores")
+}
+
+model Application {
+  id          Int         @id @default(autoincrement())
+  env_id      Int         @unique
+  environment Environment @relation(fields: [env_id], references: [id], onDelete: Cascade)
+
+  ecm_replicas  Int?
+  ecm_cpu_limit String?
+  ecm_mem_limit String?
+  ecm_java_ops  String? @db.Text
+
+  userms_replicas Int?
+  pam_enabled     Boolean @default(false)
+  ispm_enabled    Boolean @default(false)
+
+  apm_enabled Boolean @default(false)
+  apm_url     String?
+  log_bucket  String?
+
+  @@map("applications")
+}
+
+model AzureSubscription {
+  id              String  @id
+  subscription_name String
+  is_internal     Boolean @default(false)
+
+  @@map("azure_subscriptions")
+}
+
+model AWSResource {
+  id          Int         @id @default(autoincrement())
+  env_id      Int         @unique
+  environment Environment @relation(fields: [env_id], references: [id], onDelete: Cascade)
+  last_synced DateTime    @default(now()) @updatedAt
+
+  eks           EKSCluster?
+  rds           RDSInstance?
+  elasticsearch ElasticSearch?
+
+  @@map("aws_resources")
+}
+
+model EKSCluster {
+  id              Int         @id @default(autoincrement())
+  aws_resource_id Int         @unique
+  aws_resource    AWSResource @relation(fields: [aws_resource_id], references: [id], onDelete: Cascade)
+
+  name               String
+  status             String?
+  kubernetes_version String?
+  endpoint           String?
+  arn                String?
+  vpc_id             String?
+  subnet_ids         Json?
+  nat_gateway_ips    Json?
+  total_nodes        Int?
+
+  node_groups EKSNodeGroup[]
+
+  @@map("eks_clusters")
+}
+
+model EKSNodeGroup {
+  id             Int        @id @default(autoincrement())
+  eks_cluster_id Int
+  eks_cluster    EKSCluster @relation(fields: [eks_cluster_id], references: [id], onDelete: Cascade)
+
+  name           String
+  instance_types Json?
+  desired_size   Int?
+  min_size       Int?
+  max_size       Int?
+  status         String?
+
+  @@map("eks_node_groups")
+}
+
+model RDSInstance {
+  id              Int         @id @default(autoincrement())
+  aws_resource_id Int         @unique
+  aws_resource    AWSResource @relation(fields: [aws_resource_id], references: [id], onDelete: Cascade)
+
+  identifier          String
+  endpoint            String?
+  status              String?
+  engine              String?
+  engine_version      String?
+  instance_class      String?
+  allocated_storage_gb Int?
+  multi_az            Boolean @default(false)
+  storage_encrypted   Boolean @default(false)
+  cpu_percent         Float?
+  free_storage_gb     Float?
+  connections         Int?
+
+  @@map("rds_instances")
+}
+
+model ElasticSearch {
+  id              Int         @id @default(autoincrement())
+  aws_resource_id Int         @unique
+  aws_resource    AWSResource @relation(fields: [aws_resource_id], references: [id], onDelete: Cascade)
+
+  domain_name    String
+  status         String?
+  version        String?
+  endpoint       String?
+  instance_type  String?
+  instance_count Int?
+  volume_size_gb Int?
+
+  @@map("elasticsearch_domains")
+}
